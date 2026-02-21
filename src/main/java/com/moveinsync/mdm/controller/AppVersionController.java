@@ -13,8 +13,19 @@ public class AppVersionController {
 
     private final AppVersionService service;
 
+    /**
+     * ADMIN: Create new app version
+     */
     @PostMapping
     public AppVersion create(@RequestBody AppVersionRequest request) {
         return service.createVersion(request);
+    }
+
+    /**
+     * Public: Get latest version (cached)
+     */
+    @GetMapping("/latest")
+    public AppVersion latest() {
+        return service.getLatestVersion();
     }
 }

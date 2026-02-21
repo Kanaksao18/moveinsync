@@ -21,6 +21,13 @@ public class UpdateSchedule extends BaseEntity {
     private LocalDateTime scheduledTime;
 
     private String rolloutType; // IMMEDIATE / PHASED
+    private String rollbackScope = "FAILED_ONLY";
 
     private Integer percentage; // used for phased rollout
+
+    private Integer batchPercentage;
+    private Integer batchNumber;
+
+    private Integer failureThreshold;  // %allowed failure
+    private  String status;            // ACTIVE , Failed , COMPLETED, ROLLED_BACK
 }

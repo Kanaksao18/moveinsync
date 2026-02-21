@@ -29,10 +29,13 @@ public class SecurityConfig {
                                 "/api/auth/**",
                                 "/actuator/**"   // 👈 IMPORTANT
                         ).permitAll()
+                        .requestMatchers("/api/version/latest").permitAll()
 
                         // ADMIN / JWT protected
                         .requestMatchers("/api/update/**").authenticated()
 
+                        .requestMatchers("/api/compatibility/**").authenticated()
+                        .requestMatchers("/api/version/**").authenticated()
                         .anyRequest().authenticated()
                 )
         // ❌ REMOVE httpBasic (this causes browser popup)

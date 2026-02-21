@@ -10,6 +10,7 @@ public class UpdateScheduleRequest {
     private String region;
     private String rolloutType;
     private Integer percentage;
+    private Integer batchPercentage;
 
 
 }

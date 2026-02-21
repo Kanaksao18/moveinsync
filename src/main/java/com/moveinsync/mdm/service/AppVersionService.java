@@ -16,6 +16,7 @@ import java.time.LocalDate;
 public class AppVersionService {
 
     private final AppVersionRepository repository;
+    private final VersionCompatibilityService compatibilityService;
 
     /**
      * Cached latest version (high-read, low-write)
@@ -37,6 +38,13 @@ public class AppVersionService {
                     throw new BadRequestException("Version already exists");
                 });
 
+        // Optional: ensure versionCode is numeric
+        try {
+            Double.parseDouble(request.getVersionCode());
+        } catch (Exception e) {
+            throw new BadRequestException("Version code must be numeric");
+        }
+
         AppVersion version = new AppVersion();
 
         version.setVersionCode(request.getVersionCode());
@@ -50,9 +58,9 @@ public class AppVersionService {
     }
 
     /**
-     * Prevent downgrade
+     * Validate upgrade using compatibility matrix
      */
-    public boolean isDowngrade(String current, String target) {
-        return Double.parseDouble(target) < Double.parseDouble(current);
+    public void validateUpgrade(String current, String target) {
+        compatibilityService.validateUpgrade(current, target);
     }
 }
