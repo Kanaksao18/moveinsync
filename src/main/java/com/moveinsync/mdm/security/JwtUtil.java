@@ -22,10 +22,12 @@ public class JwtUtil {
     private Long expiration;
 
     private Key getSigningKey() {
+        // Shared signing key for JWT issue/verify.
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
     public String generateToken(String username, String role) {
+        // Role claim is used by JwtAuthenticationFilter to build Spring authorities.
         Map<String, Object> claims = new HashMap<>();
         claims.put("role", role);
 
@@ -49,6 +51,7 @@ public class JwtUtil {
             getClaims(token);
             return true;
         } catch (Exception e) {
+            // Any parsing/signature/expiry error means token is invalid.
             return false;
         }
     }

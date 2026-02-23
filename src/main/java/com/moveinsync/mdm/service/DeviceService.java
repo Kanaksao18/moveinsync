@@ -48,6 +48,7 @@ public class DeviceService {
         deviceRepository.save(device);
 
         HeartbeatResponse response = new HeartbeatResponse();
+        // Latest version is Redis-cached to keep heartbeat path fast.
         AppVersion latest = appVersionService.getLatestVersion();
 
         if (latest == null) {
@@ -99,6 +100,7 @@ public class DeviceService {
     }
 
     public DashboardSummaryResponse getDashboardSummary() {
+        // Aggregations are currently in-memory; can be pushed to SQL for large-scale deployments.
         List<Device> devices = deviceRepository.findAll();
         long total = devices.size();
         long active = devices.stream().filter(d -> Boolean.TRUE.equals(d.getActive())).count();

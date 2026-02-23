@@ -30,11 +30,13 @@ public class SecurityConfig {
                         )
                 )
                 .authorizeHttpRequests(auth -> auth
+                        // Public/system endpoints.
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/").permitAll()
                         .requestMatchers("/api/device/heartbeat", "/api/auth/**", "/actuator/**").permitAll()
                         .requestMatchers("/api/version/latest").permitAll()
 
+                        // Write operations with stricter role requirements.
                         .requestMatchers(HttpMethod.POST, "/api/version/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/device").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/compatibility/**").hasRole("ADMIN")
@@ -47,6 +49,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/schedule/*/reject").hasAnyRole("ADMIN", "PRODUCT_HEAD")
                         .requestMatchers(HttpMethod.POST, "/api/device-update/state").hasAnyRole("ADMIN", "PRODUCT_HEAD")
 
+                        // Read and non-destructive operations for all authorized roles.
                         .requestMatchers("/api/version/**").hasAnyRole("ADMIN", "VIEWER", "PRODUCT_HEAD")
                         .requestMatchers("/api/device/**").hasAnyRole("ADMIN", "VIEWER", "PRODUCT_HEAD")
                         .requestMatchers("/api/compatibility/**").hasAnyRole("ADMIN", "VIEWER", "PRODUCT_HEAD")
@@ -58,6 +61,7 @@ public class SecurityConfig {
                         .anyRequest().denyAll()
                 );
 
+        // JWT filter authenticates bearer token before Spring's username/password chain.
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

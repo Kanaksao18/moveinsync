@@ -39,6 +39,7 @@ public class DeviceUpdateService {
         UpdateSchedule schedule = update.getSchedule();
         Device device = update.getDevice();
 
+        // State transitions capture stage timestamps and enforce rollout safety checks.
         switch (state) {
             case "DEVICE_NOTIFIED" -> update.setNotifiedAt(LocalDateTime.now());
             case "DOWNLOAD_STARTED" -> update.setDownloadStartedAt(LocalDateTime.now());
@@ -57,6 +58,7 @@ public class DeviceUpdateService {
                 update.setFailedAt(LocalDateTime.now());
                 update.setFailureStage(inferFailureStage(update));
                 update.setFailureReason(request.getFailureReason());
+                // Retry is scheduled using schedule-level backoff + max retry limits.
                 applyRetryPolicy(update);
             }
             default -> {
@@ -105,6 +107,7 @@ public class DeviceUpdateService {
 
     @Scheduled(fixedDelay = 60000)
     public void retryEligibleFailedUpdates() {
+        // Background worker retries only failed entries whose nextRetryAt has elapsed.
         List<DeviceUpdate> eligible = deviceUpdateRepository.findByStateAndNextRetryAtLessThanEqual("FAILED", LocalDateTime.now());
         for (DeviceUpdate update : eligible) {
             int retries = update.getRetryCount() != null ? update.getRetryCount() : 0;
@@ -127,6 +130,7 @@ public class DeviceUpdateService {
         int retries = update.getRetryCount() != null ? update.getRetryCount() : 0;
         int maxRetries = update.getSchedule().getMaxRetries() != null ? update.getSchedule().getMaxRetries() : 2;
         if (retries >= maxRetries) {
+            // Retry budget exhausted: keep record failed and stop scheduling retries.
             update.setNextRetryAt(null);
             return;
         }
@@ -135,6 +139,7 @@ public class DeviceUpdateService {
     }
 
     private String inferFailureStage(DeviceUpdate update) {
+        // Infer nearest stage reached before failure for better diagnostics.
         if (update.getInstallStartedAt() != null) {
             return "INSTALL";
         }
@@ -148,6 +153,7 @@ public class DeviceUpdateService {
     }
 
     private void validateNoDowngrade(Device device, UpdateSchedule schedule) {
+        // Defensive check: even if a bad schedule slips through, block downgrade at execution time.
         try {
             double current = Double.parseDouble(device.getAppVersion());
             double target = Double.parseDouble(schedule.getToVersion());

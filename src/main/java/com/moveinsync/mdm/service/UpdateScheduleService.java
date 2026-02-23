@@ -38,6 +38,7 @@ public class UpdateScheduleService {
     private final ApplicationEventPublisher eventPublisher;
 
     public UpdateSchedule schedule(UpdateScheduleRequest request, Authentication authentication) {
+        // Guard rails: block downgrade and disallow incompatible upgrade paths up front.
         validateDowngradeRestriction(request.getFromVersion(), request.getToVersion());
         compatibilityService.validateUpgrade(request.getFromVersion(), request.getToVersion());
 
@@ -65,6 +66,7 @@ public class UpdateScheduleService {
         schedule.setScheduledTime(scheduleTime);
 
         boolean requiresApproval = Boolean.TRUE.equals(schedule.getMandatoryUpdate());
+        // Mandatory rollouts go through approval even if immediately scheduled.
         if (scheduleTime.isAfter(LocalDateTime.now())) {
             schedule.setStatus(requiresApproval ? "PENDING_APPROVAL" : "SCHEDULED");
         } else {
@@ -125,6 +127,7 @@ public class UpdateScheduleService {
     }
 
     public void nextPhase(Long scheduleId) {
+        // PHASED rollout advances by increasing batch number and scheduling next eligible slice.
         UpdateSchedule schedule = getSchedule(scheduleId);
         schedule.setBatchNumber(schedule.getBatchNumber() + 1);
         scheduleRepository.save(schedule);
@@ -135,6 +138,7 @@ public class UpdateScheduleService {
         AppVersion targetVersion = appVersionRepository.findByVersionCode(schedule.getToVersion())
                 .orElse(null);
 
+        // Current implementation filters in memory for simplicity/readability.
         List<Device> remainingDevices = deviceRepository.findAll().stream()
                 .filter(d -> schedule.getRegion() == null
                         || (d.getRegion() != null && d.getRegion().equalsIgnoreCase(schedule.getRegion())))
@@ -164,6 +168,7 @@ public class UpdateScheduleService {
             deviceUpdateRepository.save(update);
 
             logAudit("DEVICE_UPDATE_SCHEDULED", schedule, device, "Device update queued");
+            // Notification dispatch is async and post-commit through an application event listener.
             eventPublisher.publishEvent(new DeviceNotificationEvent(update.getId()));
         }
     }
@@ -185,6 +190,7 @@ public class UpdateScheduleService {
         scheduleRepository.save(schedule);
 
         int threshold = schedule.getFailureThreshold() != null ? schedule.getFailureThreshold() : 25;
+        // Rollback is automatically triggered once configured failure threshold is crossed.
         if (failurePercent >= threshold) {
             triggerRollback(schedule);
         }
@@ -246,6 +252,7 @@ public class UpdateScheduleService {
 
     @Scheduled(fixedDelay = 60000)
     public void processDueSchedules() {
+        // Activates future schedules once their scheduledTime is reached.
         List<UpdateSchedule> due = scheduleRepository.findByStatusAndScheduledTimeLessThanEqual("SCHEDULED", LocalDateTime.now());
         for (UpdateSchedule schedule : due) {
             schedule.setStatus("ACTIVE");
@@ -268,6 +275,7 @@ public class UpdateScheduleService {
     }
 
     private boolean isDeviceOsSupported(String deviceOs, String supportedSpec) {
+        // Simple numeric compatibility rule (e.g., "Android >=12" -> 12).
         if (supportedSpec == null || supportedSpec.isBlank()) {
             return true;
         }
