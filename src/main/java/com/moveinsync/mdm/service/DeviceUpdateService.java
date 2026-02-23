@@ -12,6 +12,9 @@ import com.moveinsync.mdm.repository.AuditLogRepository;
 import com.moveinsync.mdm.repository.DeviceRepository;
 import com.moveinsync.mdm.repository.DeviceUpdateRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -93,16 +96,31 @@ public class DeviceUpdateService {
         return failed.size();
     }
 
-    public List<DeviceUpdateMonitoringRow> getMonitoringRows(Long scheduleId) {
-        return deviceUpdateRepository.findByScheduleId(scheduleId).stream()
-                .map(update -> new DeviceUpdateMonitoringRow(
-                        update.getId(),
-                        update.getDevice() != null ? update.getDevice().getImei() : null,
-                        update.getDevice() != null ? update.getDevice().getId() : null,
-                        update.getState(),
-                        update.getFailureReason()
-                ))
-                .toList();
+    public Page<DeviceUpdateMonitoringRow> getMonitoringRows(Long scheduleId, String state, String search, Pageable pageable) {
+        Specification<DeviceUpdate> spec = Specification.where((root, q, cb) ->
+                cb.equal(root.get("schedule").get("id"), scheduleId)
+        );
+
+        if (state != null && !state.isBlank()) {
+            String value = state.trim().toUpperCase();
+            spec = spec.and((root, q, cb) -> cb.equal(cb.upper(root.get("state")), value));
+        }
+
+        if (search != null && !search.isBlank()) {
+            String query = "%" + search.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("device").get("imei")), query),
+                    cb.like(cb.lower(root.get("failureReason")), query)
+            ));
+        }
+
+        return deviceUpdateRepository.findAll(spec, pageable).map(update -> new DeviceUpdateMonitoringRow(
+                update.getId(),
+                update.getDevice() != null ? update.getDevice().getImei() : null,
+                update.getDevice() != null ? update.getDevice().getId() : null,
+                update.getState(),
+                update.getFailureReason()
+        ));
     }
 
     @Scheduled(fixedDelay = 60000)

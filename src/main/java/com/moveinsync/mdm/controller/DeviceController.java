@@ -7,6 +7,10 @@ import com.moveinsync.mdm.entity.AuditLog;
 import com.moveinsync.mdm.entity.Device;
 import com.moveinsync.mdm.service.DeviceService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,8 +30,18 @@ public class DeviceController {
 
     // Dashboard: fetch all devices
     @GetMapping
-    public List<Device> getAllDevices() {
-        return deviceService.getAllDevices();
+    public Page<Device> getAllDevices(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String region,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String appVersion,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "lastOpenTime") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir
+    ) {
+        Pageable pageable = buildPageable(page, size, sortBy, sortDir);
+        return deviceService.getDevices(search, region, active, appVersion, pageable);
     }
 
     @PostMapping
@@ -48,5 +62,12 @@ public class DeviceController {
     @GetMapping("/{deviceId}/timeline")
     public List<AuditLog> timeline(@PathVariable Long deviceId) {
         return deviceService.getDeviceTimeline(deviceId);
+    }
+
+    private Pageable buildPageable(int page, int size, String sortBy, String sortDir) {
+        Sort sort = "asc".equalsIgnoreCase(sortDir) ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(size, 1), 200);
+        return PageRequest.of(safePage, safeSize, sort);
     }
 }

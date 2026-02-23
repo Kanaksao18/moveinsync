@@ -12,6 +12,9 @@ import com.moveinsync.mdm.repository.DeviceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -73,8 +76,35 @@ public class DeviceService {
         return response;
     }
 
-    public List<Device> getAllDevices() {
-        return deviceRepository.findAll();
+    public Page<Device> getDevices(String search, String region, Boolean active, String appVersion, Pageable pageable) {
+        Specification<Device> spec = Specification.<Device>where((Specification<Device>) null);
+
+        if (search != null && !search.isBlank()) {
+            String query = "%" + search.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("imei")), query),
+                    cb.like(cb.lower(root.get("model")), query),
+                    cb.like(cb.lower(root.get("os")), query),
+                    cb.like(cb.lower(root.get("region")), query),
+                    cb.like(cb.lower(root.get("appVersion")), query)
+            ));
+        }
+
+        if (region != null && !region.isBlank()) {
+            String value = region.trim().toLowerCase();
+            spec = spec.and((root, q, cb) -> cb.equal(cb.lower(root.get("region")), value));
+        }
+
+        if (active != null) {
+            spec = spec.and((root, q, cb) -> cb.equal(root.get("active"), active));
+        }
+
+        if (appVersion != null && !appVersion.isBlank()) {
+            String value = appVersion.trim().toLowerCase();
+            spec = spec.and((root, q, cb) -> cb.equal(cb.lower(root.get("appVersion")), value));
+        }
+
+        return deviceRepository.findAll(spec, pageable);
     }
 
     public Device addOrUpdateDevice(DeviceHeartbeatRequest request) {

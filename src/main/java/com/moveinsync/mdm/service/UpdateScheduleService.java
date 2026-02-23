@@ -17,6 +17,9 @@ import com.moveinsync.mdm.repository.DeviceUpdateRepository;
 import com.moveinsync.mdm.repository.UpdateScheduleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -221,8 +224,36 @@ public class UpdateScheduleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Schedule not found"));
     }
 
-    public List<UpdateSchedule> getAllSchedules() {
-        return scheduleRepository.findAll();
+    public Page<UpdateSchedule> getAllSchedules(
+            String status,
+            String region,
+            String fromVersion,
+            String toVersion,
+            Pageable pageable
+    ) {
+        Specification<UpdateSchedule> spec = Specification.<UpdateSchedule>where((Specification<UpdateSchedule>) null);
+
+        if (status != null && !status.isBlank()) {
+            String value = status.trim().toUpperCase();
+            spec = spec.and((root, q, cb) -> cb.equal(cb.upper(root.get("status")), value));
+        }
+
+        if (region != null && !region.isBlank()) {
+            String query = "%" + region.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.like(cb.lower(root.get("region")), query));
+        }
+
+        if (fromVersion != null && !fromVersion.isBlank()) {
+            String query = "%" + fromVersion.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.like(cb.lower(root.get("fromVersion")), query));
+        }
+
+        if (toVersion != null && !toVersion.isBlank()) {
+            String query = "%" + toVersion.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.like(cb.lower(root.get("toVersion")), query));
+        }
+
+        return scheduleRepository.findAll(spec, pageable);
     }
 
     public List<RolloutProgressRow> getRolloutProgress() {

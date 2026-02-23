@@ -8,11 +8,12 @@ import com.moveinsync.mdm.repository.AppVersionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.List;
-
 @Service
 @RequiredArgsConstructor
 public class AppVersionService {
@@ -60,8 +61,28 @@ public class AppVersionService {
         return repository.save(version);
     }
 
-    public List<AppVersion> getAllVersions() {
-        return repository.findAllByOrderByReleaseDateDesc();
+    public Page<AppVersion> getAllVersions(String search, Boolean mandatory, String customizationTag, Pageable pageable) {
+        Specification<AppVersion> spec = Specification.<AppVersion>where((Specification<AppVersion>) null);
+
+        if (search != null && !search.isBlank()) {
+            String query = "%" + search.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("versionCode")), query),
+                    cb.like(cb.lower(root.get("versionName")), query),
+                    cb.like(cb.lower(root.get("supportedOs")), query)
+            ));
+        }
+
+        if (mandatory != null) {
+            spec = spec.and((root, q, cb) -> cb.equal(root.get("mandatory"), mandatory));
+        }
+
+        if (customizationTag != null && !customizationTag.isBlank()) {
+            String query = "%" + customizationTag.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.like(cb.lower(root.get("customizationTag")), query));
+        }
+
+        return repository.findAll(spec, pageable);
     }
 
     /**

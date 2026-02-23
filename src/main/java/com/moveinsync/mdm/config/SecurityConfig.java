@@ -35,6 +35,7 @@ public class SecurityConfig {
                         .requestMatchers("/").permitAll()
                         .requestMatchers("/api/device/heartbeat", "/api/auth/**", "/actuator/**").permitAll()
                         .requestMatchers("/api/version/latest").permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 
                         // Write operations with stricter role requirements.
                         .requestMatchers(HttpMethod.POST, "/api/version/**").hasRole("ADMIN")

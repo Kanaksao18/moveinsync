@@ -5,9 +5,10 @@ import com.moveinsync.mdm.exception.BadRequestException;
 import com.moveinsync.mdm.exception.ResourceNotFoundException;
 import com.moveinsync.mdm.repository.VersionCompatibilityRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -42,8 +43,30 @@ public class VersionCompatibilityService {
         return repository.save(vc);
     }
 
-    public List<VersionCompatibility> getAllRules() {
-        return repository.findAll();
+    public Page<VersionCompatibility> getAllRules(
+            String fromVersion,
+            String toVersion,
+            Boolean requiresIntermediate,
+            Pageable pageable
+    ) {
+        Specification<VersionCompatibility> spec =
+                Specification.<VersionCompatibility>where((Specification<VersionCompatibility>) null);
+
+        if (fromVersion != null && !fromVersion.isBlank()) {
+            String query = "%" + fromVersion.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.like(cb.lower(root.get("fromVersion")), query));
+        }
+
+        if (toVersion != null && !toVersion.isBlank()) {
+            String query = "%" + toVersion.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.like(cb.lower(root.get("toVersion")), query));
+        }
+
+        if (requiresIntermediate != null) {
+            spec = spec.and((root, q, cb) -> cb.equal(root.get("requiresIntermediate"), requiresIntermediate));
+        }
+
+        return repository.findAll(spec, pageable);
     }
 
     public VersionCompatibility updateRule(Long id, VersionCompatibility request) {

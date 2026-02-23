@@ -31,6 +31,12 @@
   - region/version distributions
   - rollout progress and rate metrics
 
+## API Documentation
+- OpenAPI 3 auto-generated documentation is enabled via SpringDoc.
+- Swagger UI: `/swagger-ui.html`
+- OpenAPI JSON: `/v3/api-docs`
+- JWT bearer security scheme is documented globally for authenticated APIs.
+
 ## Caching
 - Redis-backed cache for high-read endpoints (latest version).
 - TTL-based eviction with explicit cache eviction on mutating flows.
