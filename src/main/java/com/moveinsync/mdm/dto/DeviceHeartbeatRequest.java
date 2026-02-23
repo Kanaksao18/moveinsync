@@ -13,4 +13,6 @@ public class DeviceHeartbeatRequest {
     private String os;
     private String model;
     private String region;
+    private String customizationTag;
+    private String deviceGroup;
 }

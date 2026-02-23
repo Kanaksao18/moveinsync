@@ -4,6 +4,7 @@ import com.moveinsync.mdm.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -19,32 +20,48 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-
         http
                 .csrf(csrf -> csrf.disable())
+                .cors(Customizer.withDefaults())
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.disable())
+                        .contentSecurityPolicy(csp -> csp
+                                .policyDirectives("frame-ancestors 'self' http://localhost:5173 http://localhost:8088")
+                        )
+                )
                 .authorizeHttpRequests(auth -> auth
-                        // PUBLIC endpoints
-                        .requestMatchers(
-                                "/api/device/**",
-                                "/api/auth/**",
-                                "/actuator/**"   // 👈 IMPORTANT
-                        ).permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/").permitAll()
+                        .requestMatchers("/api/device/heartbeat", "/api/auth/**", "/actuator/**").permitAll()
                         .requestMatchers("/api/version/latest").permitAll()
 
-                        // ADMIN / JWT protected
-                        .requestMatchers("/api/update/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/version/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/device").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/compatibility/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/compatibility/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/compatibility/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/schedule").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/update/schedule").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/rollout/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/schedule/*/approve").hasAnyRole("ADMIN", "PRODUCT_HEAD")
+                        .requestMatchers(HttpMethod.POST, "/api/schedule/*/reject").hasAnyRole("ADMIN", "PRODUCT_HEAD")
+                        .requestMatchers(HttpMethod.POST, "/api/device-update/state").hasAnyRole("ADMIN", "PRODUCT_HEAD")
 
-                        .requestMatchers("/api/compatibility/**").authenticated()
-                        .requestMatchers("/api/version/**").authenticated()
-                        .anyRequest().authenticated()
-                )
-        // ❌ REMOVE httpBasic (this causes browser popup)
-        ;
+                        .requestMatchers("/api/version/**").hasAnyRole("ADMIN", "VIEWER", "PRODUCT_HEAD")
+                        .requestMatchers("/api/device/**").hasAnyRole("ADMIN", "VIEWER", "PRODUCT_HEAD")
+                        .requestMatchers("/api/compatibility/**").hasAnyRole("ADMIN", "VIEWER", "PRODUCT_HEAD")
+                        .requestMatchers("/api/schedule/**").hasAnyRole("ADMIN", "VIEWER", "PRODUCT_HEAD")
+                        .requestMatchers("/api/rollout/**").hasAnyRole("ADMIN", "VIEWER", "PRODUCT_HEAD")
+                        .requestMatchers("/api/device-update/**").hasAnyRole("ADMIN", "VIEWER", "PRODUCT_HEAD")
+                        .requestMatchers("/api/audit/**").hasAnyRole("ADMIN", "VIEWER", "PRODUCT_HEAD")
+                        .requestMatchers("/api/dashboard/**").hasAnyRole("ADMIN", "VIEWER", "PRODUCT_HEAD")
+                        .anyRequest().denyAll()
+                );
 
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-
         return http.build();
     }
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();

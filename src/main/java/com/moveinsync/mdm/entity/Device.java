@@ -1,6 +1,8 @@
 package com.moveinsync.mdm.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Entity;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
@@ -22,8 +24,14 @@ public class Device extends BaseEntity {
     private String model;
 
     private String region;
+    private String customizationTag;
+    private String deviceGroup;
 
     private LocalDateTime lastOpenTime;
 
     private Boolean active = true;
+
+    @ManyToOne
+    @JsonIgnore
+    private UpdateSchedule schedule;
 }

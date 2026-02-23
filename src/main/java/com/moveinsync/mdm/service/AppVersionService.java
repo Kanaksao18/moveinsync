@@ -3,6 +3,7 @@ package com.moveinsync.mdm.service;
 import com.moveinsync.mdm.dto.AppVersionRequest;
 import com.moveinsync.mdm.entity.AppVersion;
 import com.moveinsync.mdm.exception.BadRequestException;
+import com.moveinsync.mdm.exception.ResourceNotFoundException;
 import com.moveinsync.mdm.repository.AppVersionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
@@ -10,6 +11,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -21,10 +23,12 @@ public class AppVersionService {
     /**
      * Cached latest version (high-read, low-write)
      */
-    @Cacheable(value = "latestVersion")
+    @Cacheable(value = "latestVersion", unless = "#result == null")
     public AppVersion getLatestVersion() {
+
         return repository.findTopByOrderByReleaseDateDesc()
-                .orElse(null);
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("No app versions found"));
     }
 
     /**
@@ -38,7 +42,6 @@ public class AppVersionService {
                     throw new BadRequestException("Version already exists");
                 });
 
-        // Optional: ensure versionCode is numeric
         try {
             Double.parseDouble(request.getVersionCode());
         } catch (Exception e) {
@@ -55,6 +58,10 @@ public class AppVersionService {
         version.setReleaseDate(LocalDate.now());
 
         return repository.save(version);
+    }
+
+    public List<AppVersion> getAllVersions() {
+        return repository.findAllByOrderByReleaseDateDesc();
     }
 
     /**

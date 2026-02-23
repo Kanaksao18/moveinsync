@@ -5,6 +5,7 @@ import com.moveinsync.mdm.entity.DeviceUpdate;
 import com.moveinsync.mdm.entity.UpdateSchedule;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,4 +17,7 @@ public interface DeviceUpdateRepository extends JpaRepository<DeviceUpdate, Long
 
     List<DeviceUpdate> findByScheduleAndState(UpdateSchedule schedule, String state);
     List<DeviceUpdate> findBySchedule(UpdateSchedule schedule);
+    List<DeviceUpdate> findByScheduleId(Long scheduleId);
+    long countByScheduleAndStateIn(UpdateSchedule schedule, List<String> states);
+    List<DeviceUpdate> findByStateAndNextRetryAtLessThanEqual(String state, LocalDateTime now);
 }

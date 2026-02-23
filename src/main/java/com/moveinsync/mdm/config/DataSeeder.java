@@ -16,19 +16,20 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        createUserIfMissing("admin", "admin123", "ADMIN");
+        createUserIfMissing("viewer", "viewer123", "VIEWER");
+        createUserIfMissing("producthead", "product123", "PRODUCT_HEAD");
+    }
 
-        if (adminRepo.findByUsername("admin").isEmpty()) {
-
-            AdminUser admin = new AdminUser();
-            admin.setUsername("admin");
-            admin.setPassword(passwordEncoder.encode("admin123"));
-            admin.setRole("ADMIN");
-
-            adminRepo.save(admin);
-
-            System.out.println("✅ Default admin user created (admin / admin123)");
-        } else {
-            System.out.println("ℹ️ Admin user already exists");
+    private void createUserIfMissing(String username, String password, String role) {
+        if (adminRepo.findByUsername(username).isPresent()) {
+            return;
         }
+
+        AdminUser user = new AdminUser();
+        user.setUsername(username);
+        user.setPassword(passwordEncoder.encode(password));
+        user.setRole(role);
+        adminRepo.save(user);
     }
 }

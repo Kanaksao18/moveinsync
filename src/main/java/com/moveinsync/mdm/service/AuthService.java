@@ -1,5 +1,6 @@
 package com.moveinsync.mdm.service;
 
+import com.moveinsync.mdm.dto.AuthResponse;
 import com.moveinsync.mdm.dto.LoginRequest;
 import com.moveinsync.mdm.entity.AdminUser;
 import com.moveinsync.mdm.exception.UnauthorizedException;
@@ -17,7 +18,7 @@ public class AuthService {
     private final PasswordEncoder encoder;
     private final JwtUtil jwtUtil;
 
-    public String login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request) {
 
         AdminUser user = repo.findByUsername(request.getUsername())
                 .orElseThrow(() -> new UnauthorizedException("Invalid username"));
@@ -26,6 +27,7 @@ public class AuthService {
             throw new UnauthorizedException("Invalid password");
         }
 
-        return jwtUtil.generateToken(user.getUsername());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
+        return new AuthResponse(token, user.getRole());
     }
 }

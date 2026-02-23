@@ -6,6 +6,8 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "device_updates")
 @Getter
@@ -26,5 +28,15 @@ public class DeviceUpdate extends BaseEntity {
     // COMPLETED
     // FAILED
 
+    private LocalDateTime notifiedAt;
+    private LocalDateTime downloadStartedAt;
+    private LocalDateTime downloadCompletedAt;
+    private LocalDateTime installStartedAt;
+    private LocalDateTime installCompletedAt;
+    private LocalDateTime failedAt;
+    private LocalDateTime nextRetryAt;
+
+    private Integer retryCount = 0;
+    private String failureStage;
     private String failureReason;
 }

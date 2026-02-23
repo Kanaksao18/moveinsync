@@ -17,8 +17,13 @@ public class UpdateSchedule extends BaseEntity {
     private String toVersion;
 
     private String region;   // Bangalore, Chennai etc
+    private String customizationTag;
+    private String deviceGroup;
 
     private LocalDateTime scheduledTime;
+    private LocalDateTime approvedAt;
+    private String approvedBy;
+    private String createdBy;
 
     private String rolloutType; // IMMEDIATE / PHASED
     private String rollbackScope = "FAILED_ONLY";
@@ -30,4 +35,8 @@ public class UpdateSchedule extends BaseEntity {
 
     private Integer failureThreshold;  // %allowed failure
     private  String status;            // ACTIVE , Failed , COMPLETED, ROLLED_BACK
+    private Integer failurePercentage;
+    private Integer maxRetries;
+    private Integer retryBackoffMinutes;
+    private Boolean mandatoryUpdate;
 }

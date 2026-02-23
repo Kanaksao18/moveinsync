@@ -1,14 +1,21 @@
 package com.moveinsync.mdm.service;
 
+import com.moveinsync.mdm.dto.DeviceUpdateMonitoringRow;
 import com.moveinsync.mdm.dto.UpdateStateRequest;
 import com.moveinsync.mdm.entity.AuditLog;
+import com.moveinsync.mdm.entity.Device;
 import com.moveinsync.mdm.entity.DeviceUpdate;
+import com.moveinsync.mdm.entity.UpdateSchedule;
+import com.moveinsync.mdm.exception.BadRequestException;
 import com.moveinsync.mdm.exception.ResourceNotFoundException;
 import com.moveinsync.mdm.repository.AuditLogRepository;
+import com.moveinsync.mdm.repository.DeviceRepository;
 import com.moveinsync.mdm.repository.DeviceUpdateRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -17,52 +24,149 @@ public class DeviceUpdateService {
 
     private final DeviceUpdateRepository deviceUpdateRepository;
     private final AuditLogRepository auditLogRepository;
-    private final UpdateScheduleService updateScheduleService;   // 👈 ADD THIS
+    private final UpdateScheduleService updateScheduleService;
+    private final DeviceRepository deviceRepository;
 
     public void updateState(UpdateStateRequest request) {
-
-        DeviceUpdate du = deviceUpdateRepository.findById(request.getDeviceUpdateId())
+        DeviceUpdate update = deviceUpdateRepository.findById(request.getDeviceUpdateId())
                 .orElseThrow(() -> new ResourceNotFoundException("Device update not found"));
 
-        du.setState(request.getState());
-        du.setFailureReason(request.getFailureReason());
+        String state = request.getState() != null ? request.getState().trim().toUpperCase() : "";
+        if (state.isEmpty()) {
+            throw new BadRequestException("State is required");
+        }
 
-        deviceUpdateRepository.save(du);
+        UpdateSchedule schedule = update.getSchedule();
+        Device device = update.getDevice();
 
-        // ✅ Audit log
-        AuditLog log = new AuditLog();
-        log.setActor("DEVICE");
-        log.setAction(request.getState());
-        log.setDetails("DeviceUpdateId: " + du.getId());
-        auditLogRepository.save(log);
+        switch (state) {
+            case "DEVICE_NOTIFIED" -> update.setNotifiedAt(LocalDateTime.now());
+            case "DOWNLOAD_STARTED" -> update.setDownloadStartedAt(LocalDateTime.now());
+            case "DOWNLOAD_COMPLETED" -> update.setDownloadCompletedAt(LocalDateTime.now());
+            case "INSTALL_STARTED" -> {
+                validateNoDowngrade(device, schedule);
+                update.setInstallStartedAt(LocalDateTime.now());
+            }
+            case "COMPLETED" -> {
+                validateNoDowngrade(device, schedule);
+                update.setInstallCompletedAt(LocalDateTime.now());
+                device.setAppVersion(schedule.getToVersion());
+                deviceRepository.save(device);
+            }
+            case "FAILED" -> {
+                update.setFailedAt(LocalDateTime.now());
+                update.setFailureStage(inferFailureStage(update));
+                update.setFailureReason(request.getFailureReason());
+                applyRetryPolicy(update);
+            }
+            default -> {
+            }
+        }
 
-        // 🔥 If device failed → check rollout health
-        if ("FAILED".equalsIgnoreCase(request.getState())) {
-            updateScheduleService.evaluateRolloutHealth(
-                    du.getSchedule().getId()
-            );
+        update.setState(state);
+        deviceUpdateRepository.save(update);
+        logAudit("DEVICE_UPDATE_" + state, update, request.getFailureReason());
+
+        if ("FAILED".equals(state)) {
+            updateScheduleService.evaluateRolloutHealth(schedule.getId());
         }
     }
+
     public int retryFailedDevices(Long scheduleId) {
+        List<DeviceUpdate> failed = deviceUpdateRepository.findByScheduleAndState(
+                updateScheduleService.getSchedule(scheduleId),
+                "FAILED"
+        );
 
-        List<DeviceUpdate> failed =
-                deviceUpdateRepository.findByScheduleAndState(
-                        updateScheduleService.getSchedule(scheduleId),
-                        "FAILED"
-                );
-
-        for (DeviceUpdate du : failed) {
-            du.setState("SCHEDULED");
-            du.setFailureReason(null);
-            deviceUpdateRepository.save(du);
-
-            AuditLog log = new AuditLog();
-            log.setActor("SYSTEM");
-            log.setAction("RETRY");
-            log.setDetails("Retry DeviceUpdateId: " + du.getId());
-            auditLogRepository.save(log);
+        for (DeviceUpdate update : failed) {
+            update.setState("SCHEDULED");
+            update.setFailureReason(null);
+            update.setFailureStage(null);
+            update.setNextRetryAt(null);
+            update.setRetryCount((update.getRetryCount() != null ? update.getRetryCount() : 0) + 1);
+            deviceUpdateRepository.save(update);
+            logAudit("DEVICE_UPDATE_RETRY_MANUAL", update, "Manual retry");
         }
 
         return failed.size();
+    }
+
+    public List<DeviceUpdateMonitoringRow> getMonitoringRows(Long scheduleId) {
+        return deviceUpdateRepository.findByScheduleId(scheduleId).stream()
+                .map(update -> new DeviceUpdateMonitoringRow(
+                        update.getId(),
+                        update.getDevice() != null ? update.getDevice().getImei() : null,
+                        update.getDevice() != null ? update.getDevice().getId() : null,
+                        update.getState(),
+                        update.getFailureReason()
+                ))
+                .toList();
+    }
+
+    @Scheduled(fixedDelay = 60000)
+    public void retryEligibleFailedUpdates() {
+        List<DeviceUpdate> eligible = deviceUpdateRepository.findByStateAndNextRetryAtLessThanEqual("FAILED", LocalDateTime.now());
+        for (DeviceUpdate update : eligible) {
+            int retries = update.getRetryCount() != null ? update.getRetryCount() : 0;
+            int maxRetries = update.getSchedule().getMaxRetries() != null ? update.getSchedule().getMaxRetries() : 2;
+            if (retries >= maxRetries) {
+                continue;
+            }
+
+            update.setState("SCHEDULED");
+            update.setRetryCount(retries + 1);
+            update.setFailureReason(null);
+            update.setFailureStage(null);
+            update.setNextRetryAt(null);
+            deviceUpdateRepository.save(update);
+            logAudit("DEVICE_UPDATE_RETRY_AUTO", update, "Auto retry policy executed");
+        }
+    }
+
+    private void applyRetryPolicy(DeviceUpdate update) {
+        int retries = update.getRetryCount() != null ? update.getRetryCount() : 0;
+        int maxRetries = update.getSchedule().getMaxRetries() != null ? update.getSchedule().getMaxRetries() : 2;
+        if (retries >= maxRetries) {
+            update.setNextRetryAt(null);
+            return;
+        }
+        int backoff = update.getSchedule().getRetryBackoffMinutes() != null ? update.getSchedule().getRetryBackoffMinutes() : 10;
+        update.setNextRetryAt(LocalDateTime.now().plusMinutes(backoff));
+    }
+
+    private String inferFailureStage(DeviceUpdate update) {
+        if (update.getInstallStartedAt() != null) {
+            return "INSTALL";
+        }
+        if (update.getDownloadStartedAt() != null) {
+            return "DOWNLOAD";
+        }
+        if (update.getNotifiedAt() != null) {
+            return "NOTIFICATION";
+        }
+        return "SCHEDULE";
+    }
+
+    private void validateNoDowngrade(Device device, UpdateSchedule schedule) {
+        try {
+            double current = Double.parseDouble(device.getAppVersion());
+            double target = Double.parseDouble(schedule.getToVersion());
+            if (target < current) {
+                throw new BadRequestException("Downgrade blocked at device validation stage");
+            }
+        } catch (NumberFormatException ex) {
+            throw new BadRequestException("Invalid version format for downgrade validation");
+        }
+    }
+
+    private void logAudit(String action, DeviceUpdate update, String details) {
+        AuditLog log = new AuditLog();
+        log.setActor("DEVICE");
+        log.setAction(action);
+        log.setDetails(details);
+        log.setScheduleId(update.getSchedule() != null ? update.getSchedule().getId() : null);
+        log.setDeviceId(update.getDevice() != null ? update.getDevice().getId() : null);
+        log.setDeviceImei(update.getDevice() != null ? update.getDevice().getImei() : null);
+        auditLogRepository.save(log);
     }
 }

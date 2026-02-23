@@ -6,6 +6,8 @@ import com.moveinsync.mdm.service.AppVersionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/version")
 @RequiredArgsConstructor
@@ -27,5 +29,10 @@ public class AppVersionController {
     @GetMapping("/latest")
     public AppVersion latest() {
         return service.getLatestVersion();
+    }
+
+    @GetMapping
+    public List<AppVersion> list() {
+        return service.getAllVersions();
     }
 }

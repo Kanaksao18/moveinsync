@@ -8,4 +8,5 @@ public class UpdateStateRequest {
     private Long deviceUpdateId;
     private String state;
     private String failureReason;
+    private String reportedVersion;
 }
